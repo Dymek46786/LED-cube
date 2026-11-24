@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#08090d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LED Cube">
+<title>LED Cube</title>
+
+<!-- Dynamiczny Manifest PWA + Ikona SVG (pozwala zainstalować jako osobną aplikację) -->
+<script>
+(function() {
+  const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <rect width="512" height="512" rx="112" fill="#08090d"/>
+    <g fill="none" stroke="#4fd1ff" stroke-width="24" stroke-linejoin="round">
+      <polygon points="256,96 400,176 400,336 256,416 112,336 112,176"/>
+      <polyline points="112,176 256,256 400,176"/>
+      <line x1="256" y1="256" x2="256" y2="416"/>
+    </g>
+    <circle cx="256" cy="256" r="22" fill="#4fd1ff"/>
+    <circle cx="256" cy="96" r="16" fill="#3ddc84"/>
+    <circle cx="400" cy="176" r="16" fill="#4fd1ff"/>
+    <circle cx="112" cy="176" r="16" fill="#4fd1ff"/>
+  </svg>`;
+  const iconUrl = 'data:image/svg+xml;base64,' + btoa(svgIcon);
+
+  const appleIcon = document.createElement('link');
+  appleIcon.rel = 'apple-touch-icon';
+  appleIcon.href = iconUrl;
+  document.head.appendChild(appleIcon);
+
+  const manifest = {
+    name: 'LED Cube 6x6x6',
+    short_name: 'LED Cube',
+    description: 'Sterownik i edytor animacji 3D dla kostki LED',
+    start_url: location.href,
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#08090d',
+    theme_color: '#08090d',
+    icons: [
+      { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = URL.createObjectURL(blob);
+  document.head.appendChild(link);
+})();
+</script>
+
+<style>
+:root {
+  --bg:#08090d;
+  --card:#111318;
+  --card2:#181b24;
+  --fg:#e8eaf0;
+  --fg2:#8890a8;
+  --acc:#4fd1ff;
+  --acc2:#0066ff;
+  --off:#1e2130;
+  --off2:#252a3a;
+  --red:#ff5f6d;
+  --green:#3ddc84;
+  --border:#ffffff12;
+  --radius:16px;
+  --shadow:0 4px 24px #0008;
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,-apple-system,sans-serif;
+  min-height:100vh;
+  overscroll-behavior-y:none;
+}
+
+/* Header */
+.header {
+  position:sticky; top:0; z-index:20;
+  background:#08090de6;
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  padding:12px 16px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.header h1 { margin:0; font-size:18px; font-weight:700; letter-spacing:-.3px; }
+.header h1 span { color:var(--acc); }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--red); display:inline-block; margin-right:6px; transition:background .2s, box-shadow .2s; }
+.dot.on { background:var(--green); box-shadow:0 0 8px var(--green); }
+#statusShort { font-size:13px; color:var(--fg2); }
+
+/* Install Banner */
+.install-banner {
+  display:none;
+  background:linear-gradient(135deg, #131c2e 0%, #0f1726 100%);
+  border:1px solid #4fd1ff44;
+  border-radius:var(--radius);
+  padding:12px 14px;
+  margin-bottom:12px;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.install-banner.visible { display:flex; }
+.install-text { font-size:13px; line-height:1.35; }
+.install-text strong { color:var(--acc); display:block; }
+
+/* Page */
+.page { max-width:500px; margin:0 auto; padding:12px 12px 40px; }
+
+/* Cards */
+.card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px;
+  margin-bottom:12px;
+  box-shadow:var(--shadow);
+}
+.card-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin:0 0 12px;
+}
+.card-title {
+  font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase;
+  color:var(--fg2); margin:0;
+}
+
+/* Buttons */
+button {
+  background:var(--off);
+  color:var(--fg);
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:10px 12px;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  transition:background .15s, transform .1s, box-shadow .15s, border-color .15s;
+  display:inline-flex; align-items:center; justify-content:center; gap:5px;
+  user-select:none;
+}
+button:active { transform:scale(.96); }
+button:hover { background:var(--off2); }
+button.primary {
+  background:linear-gradient(135deg, var(--acc) 0%, var(--acc2) 100%);
+  color:#000; font-weight:700; border:0;
+  box-shadow:0 2px 16px #4fd1ff33;
+}
+button.primary:hover { box-shadow:0 4px 24px #4fd1ff55; }
+button.danger { color:var(--red); border-color:#ff5f6d25; }
+button.danger:hover { background:#ff5f6d18; }
+button.small { padding:6px 10px; font-size:12px; border-radius:8px; }
+button.toggle-on { border-color:var(--acc); color:var(--acc); background:#4fd1ff15; }
+button:disabled { opacity:.35; pointer-events:none; }
+
+/* Connect card */
+.connect-row { display:flex; align-items:center; gap:10px; }
+.connect-row button { flex:1; padding:13px; font-size:14px; }
+#statusFull { font-size:12px; color:var(--fg2); margin-top:8px; min-height:16px; }
+
+/* Sliders */
+.slider-row { display:flex; align-items:center; gap:10px; margin:8px 0; }
+.slider-row label { font-size:13px; color:var(--fg2); min-width:68px; }
+.slider-val { font-size:12px; color:var(--acc); font-variant-numeric:tabular-nums; min-width:32px; text-align:right; }
+input[type=range] {
+  flex:1; -webkit-appearance:none; height:5px;
+  background:var(--off2); border-radius:4px; outline:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+  background:var(--acc); box-shadow:0 0 8px #4fd1ff88; cursor:pointer;
+}
+
+/* Modes */
+.modes { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+.modes button { padding:10px 6px; font-size:13px; border-radius:10px; }
+.modes button.active {
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  color:#000; font-weight:700; border:0;
+}
+
+/* 3D Preview */
+.preview-wrap {
+  position:relative;
+  background:radial-gradient(circle at center, #141824 0%, #0b0d13 100%);
+  border:1px solid var(--border);
+  border-radius:12px;
+  margin-bottom:12px;
+  overflow:hidden;
+  touch-action:none;
+}
+#cubeCanvas {
+  display:block;
+  width:100%;
+  height:215px;
+  cursor:grab;
+}
+#cubeCanvas:active { cursor:grabbing; }
+.preview-hint {
+  position:absolute; bottom:8px; left:10px;
+  font-size:11px; color:#ffffff44; pointer-events:none;
+}
+.preview-reset {
+  position:absolute; top:8px; right:8px;
+  padding:4px 8px; font-size:11px; background:#00000066; backdrop-filter:blur(4px);
+}
+
+/* Frame strip */
+.strip-wrap { overflow-x:auto; padding-bottom:4px; margin:0 -4px 10px; }
+.strip { display:flex; gap:6px; padding:0 4px; }
+.strip-btn {
+  flex:0 0 auto; min-width:38px; padding:8px 10px;
+  border-radius:10px; font-size:13px; font-weight:600;
+  background:var(--off); border:1px solid var(--border);
+}
+.strip-btn.active {
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  color:#000; border:0;
+}
+
+/* Frame actions */
+.frame-actions { display:flex; gap:5px; margin-bottom:10px; }
+.frame-actions button { flex:1; padding:9px 4px; font-size:12px; }
+
+/* Layer selector */
+.layer-row {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:4px; margin:8px 0 6px;
+}
+.layer-row button { flex:1; padding:8px 0; font-size:13px; font-weight:600; }
+.layer-row button.active {
+  background:var(--acc); color:#000; font-weight:700; border:0;
+}
+#layerLabel { font-size:12px; color:var(--fg2); margin-bottom:8px; text-align:center; }
+
+/* Grid (Drag-to-Draw) */
+.grid {
+  display:grid; grid-template-columns:repeat(6,1fr);
+  gap:6px; margin:0 0 10px;
+  touch-action:none;
+  user-select:none;
+}
+.vox {
+  aspect-ratio:1; border-radius:9px;
+  background:var(--off); border:1px solid var(--border);
+  cursor:pointer; transition:background .08s, box-shadow .08s, transform .08s;
+  position:relative;
+}
+.vox.ghost {
+  border-color:#4fd1ff55;
+  box-shadow:inset 0 0 6px #4fd1ff22;
+}
+.vox.on {
+  background:var(--acc);
+  box-shadow:0 0 12px #4fd1ff88;
+  border-color:transparent;
+}
+
+/* Grid & 3D Tools */
+.tool-grid {
+  display:grid; grid-template-columns:repeat(3, 1fr);
+  gap:6px; margin-bottom:8px;
+}
+.tool-grid button { padding:8px 4px; font-size:12px; }
+
+/* ms input */
+.ms-row {
+  display:flex; align-items:center; gap:8px; margin-top:10px;
+  padding-top:10px; border-top:1px solid var(--border);
+}
+.ms-row label { font-size:13px; color:var(--fg2); white-space:nowrap; }
+.ms-row input {
+  flex:1; background:var(--off); color:var(--fg); border:1px solid var(--border);
+  border-radius:10px; padding:9px 12px; font-size:14px; outline:none;
+}
+.ms-row input:focus { border-color:var(--acc); }
+
+/* Play */
+.play-row { display:flex; gap:8px; }
+.play-row button { flex:1; padding:13px; font-size:14px; }
+.loop-row {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-top:10px; font-size:13px; color:var(--fg2);
+}
+.loop-left { display:flex; align-items:center; gap:8px; }
+input[type=checkbox] { width:18px; height:18px; accent-color:var(--acc); cursor:pointer; }
+
+/* Projects */
+.projects-top { display:flex; gap:8px; margin-bottom:8px; }
+.projects-top input {
+  flex:1; background:var(--off); color:var(--fg); border:1px solid var(--border);
+  border-radius:10px; padding:10px 12px; font-size:14px; outline:none;
+}
+.projects-top input:focus { border-color:var(--acc); }
+select {
+  width:100%; background:var(--off); color:var(--fg); border:1px solid var(--border);
+  border-radius:10px; padding:10px 12px; font-size:14px; outline:none;
+  margin-bottom:8px;
+}
+.projects-actions, .export-row { display:flex; gap:8px; margin-top:8px; }
+.projects-actions button, .export-row button { flex:1; padding:10px; font-size:13px; }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--card2); border:1px solid var(--border);
+  border-radius:12px; padding:11px 18px; font-size:13px;
+  box-shadow:var(--shadow); transition:transform .25s cubic-bezier(.2,.8,.2,1); z-index:99; white-space:nowrap;
+}
+.toast.show { transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>LED <span>Cube</span> <small style="font-size:11px;color:var(--fg2);font-weight:500">6×6×6</small></h1>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span class="dot" id="dot"></span>
+    <span id="statusShort">Niepołączony</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- Baner instalacji jako samodzielna aplikacja -->
+  <div class="install-banner" id="installBanner">
+    <div class="install-text">
+      <strong>Zainstaluj jako aplikację</strong>
+      Uruchamiaj pełnoekranowo z ikony na pulpicie, bez przeglądarki.
+    </div>
+    <button class="primary small" id="installAppBtn">Zainstaluj</button>
+  </div>
+
+  <!-- Połączenie -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Połączenie Bluetooth</div>
+    </div>
+    <div class="connect-row">
+      <button class="primary" id="connectBtn">Połącz z kostką</button>
+      <button id="disconnectBtn" disabled>Rozłącz</button>
+    </div>
+    <div id="statusFull"></div>
+  </div>
+
+  <!-- Efekty -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Tryby i parametry</div>
+    </div>
+    <div class="modes" id="modes"></div>
+    <div style="margin-top:12px">
+      <div class="slider-row">
+        <label>Jasność</label>
+        <input type="range" id="bri" min="0" max="255" value="200">
+        <span class="slider-val" id="briVal">200</span>
+      </div>
+      <div class="slider-row">
+        <label>Szybkość</label>
+        <input type="range" id="spd" min="0" max="255" value="180">
+        <span class="slider-val" id="spdVal">180</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edytor klatek + Podgląd 3D -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Edytor klatek 3D</div>
+      <button class="small" id="onionBtn" title="Pokaż poprzednią klatkę jako obrys">👻 Kalkuj</button>
+    </div>
+
+    <!-- Interaktywny podgląd 3D -->
+    <div class="preview-wrap">
+      <canvas id="cubeCanvas"></canvas>
+      <div class="preview-hint">Przeciągnij, aby obrócić 3D</div>
+      <button class="preview-reset" id="resetViewBtn">Reset widoku</button>
+    </div>
+
+    <!-- Pasek klatek -->
+    <div class="strip-wrap"><div class="strip" id="strip"></div></div>
+
+    <div class="frame-actions">
+      <button id="addBtn">+ Nowa</button>
+      <button id="dupBtn">Duplikuj</button>
+      <button id="leftBtn" title="Przesuń klatkę w lewo">◀</button>
+      <button id="rightBtn" title="Przesuń klatkę w prawo">▶</button>
+      <button id="delBtn" class="danger">Usuń</button>
+    </div>
+
+    <!-- Wybór warstwy Z -->
+    <div class="layer-row" id="layers"></div>
+    <div id="layerLabel">Warstwa 0 (dół)</div>
+
+    <!-- Siatka 6x6 z obsługą przeciągania -->
+    <div class="grid" id="grid"></div>
+
+    <!-- Narzędzia edycji -->
+    <div class="tool-grid">
+      <button id="clearBtn">Wyczyść Z</button>
+      <button id="fillBtn">Zapal Z</button>
+      <button id="invertBtn">Negatyw Z</button>
+      <button id="copyBelowBtn">Kopiuj z Z-1</button>
+      <button id="shiftUpBtn">Całość ↑ Z</button>
+      <button id="shiftDownBtn">Całość ↓ Z</button>
+    </div>
+
+    <div class="ms-row">
+      <label>Czas klatki</label>
+      <input type="number" id="ms" min="20" max="10000" step="10" value="300">
+      <span style="font-size:13px;color:var(--fg2)">ms</span>
+      <button class="small" id="applyMsAllBtn" title="Ustaw ten czas dla wszystkich klatek">Dla wszystkich</button>
+    </div>
+  </div>
+
+  <!-- Odtwarzanie -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Odtwarzanie sekwencji</div>
+      <span id="frameCounter" style="font-size:12px;color:var(--fg2)">Klatka 1 / 1</span>
+    </div>
+    <div class="play-row">
+      <button class="primary" id="playBtn">▶ Odtwórz</button>
+      <button id="stopBtn">■ Stop</button>
+    </div>
+    <div class="loop-row">
+      <div class="loop-left">
+        <input type="checkbox" id="loop" checked>
+        <label for="loop">Zapętl sekwencję</label>
+      </div>
+      <span id="totalDuration" style="font-size:12px">Czas: 0.3s</span>
+    </div>
+  </div>
+
+  <!-- Projekty -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Zapisane projekty</div>
+    </div>
+    <div class="projects-top">
+      <input type="text" id="name" placeholder="Nazwa projektu...">
+      <button class="primary" id="saveBtn">Zapisz</button>
+    </div>
+    <select id="projects"></select>
+    <div class="projects-actions">
+      <button id="loadBtn">Wczytaj</button>
+      <button id="removeBtn" class="danger">Usuń</button>
+    </div>
+    <div class="export-row">
+      <button id="exportBtn">⬇ Eksportuj JSON</button>
+      <button id="importBtn">⬆ Importuj JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SERVICE = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CHARACT = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const MODES   = ['Ręczny','Deszcz','Fala','Iskry','Kostka','Wszystko'];
+const $       = id => document.getElementById(id);
+
+let ch = null, dev = null;
+let queue = Promise.resolve(), pendingWrites = 0;
+let frames = [], cur = 0, playing = false, playToken = 0;
+let curLayer = 0, onionSkin = false;
+
+const newFrame   = () => ({ v: new Uint8Array(216), ms: 300 });
+const cloneFrame = f  => ({ v: new Uint8Array(f.v), ms: f.ms });
+
+// ---- Instalacja PWA (samodzielna aplikacja) ----
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  $('installBanner').classList.add('visible');
+});
+
+$('installAppBtn').onclick = async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    $('installBanner').classList.remove('visible');
+  }
+  deferredPrompt = null;
+};
+
+window.addEventListener('appinstalled', () => {
+  $('installBanner').classList.remove('visible');
+  toast('Zainstalowano jako aplikację!');
+});
+
+// ---- Toast ----
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---- Bluetooth z zabezpieczeniem kolejki ----
+function send(bytes) {
+  if (!ch || pendingWrites > 4) return Promise.resolve();
+  pendingWrites++;
+  queue = queue
+    .then(() => ch ? ch.writeValue(new Uint8Array(bytes)) : null)
+    .catch(e => console.warn('BLE write:', e))
+    .finally(() => { pendingWrites = Math.max(0, pendingWrites - 1); });
+  return queue;
+}
+
+function pack(v) {
+  const out = new Uint8Array(27);
+  for (let i = 0; i < 216; i++) if (v[i]) out[i >> 3] |= 1 << (i & 7);
+  return out;
+}
+
+let holdTimer = null;
+function pushFrame(f) {
+  clearInterval(holdTimer);
+  send([0x04, ...pack(f.v)]);
+  holdTimer = setInterval(() => {
+    if (ch && !playing && pendingWrites === 0) send([0x04, ...pack(f.v)]);
+  }, 250);
+}
+
+function setConnected(name) {
+  $('dot').classList.add('on');
+  $('statusShort').textContent = name;
+  $('statusFull').textContent = 'Połączono pomyślnie ✓';
+  $('connectBtn').disabled = true;
+  $('disconnectBtn').disabled = false;
+  pushFrame(frames[cur]);
+}
+function setDisconnected(msg) {
+  ch = null; dev = null; pendingWrites = 0;
+  clearInterval(holdTimer);
+  $('dot').classList.remove('on');
+  $('statusShort').textContent = 'Niepołączony';
+  $('statusFull').textContent = msg || '';
+  $('connectBtn').disabled = false;
+  $('disconnectBtn').disabled = true;
+}
+
+$('connectBtn').onclick = async () => {
+  if (!navigator.bluetooth) {
+    toast('Brak wsparcia Web Bluetooth w tej przeglądarce');
+    return;
+  }
+  try {
+    $('statusFull').textContent = 'Szukam urządzenia LED-Cube…';
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'LED-Cube' }], optionalServices: [SERVICE]
+    });
+    dev.addEventListener('gattserverdisconnected', () => setDisconnected('Rozłączono z kostką'));
+    $('statusFull').textContent = 'Łączenie z GATT…';
+    const server = await dev.gatt.connect();
+    const svc    = await server.getPrimaryService(SERVICE);
+    ch           = await svc.getCharacteristic(CHARACT);
+    setConnected(dev.name);
+  } catch (e) { setDisconnected(e.name === 'NotFoundError' ? 'Anulowano wybór' : 'Błąd: ' + e.message); }
+};
+$('disconnectBtn').onclick = () => { if (dev) dev.gatt.disconnect(); };
+
+// ---- Efekty i suwaki ----
+MODES.forEach((name, i) => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => {
+    stopPlay();
+    if (i !== 0) clearInterval(holdTimer);
+    else pushFrame(frames[cur]);
+    send([0x01, i]);
+    [...$('modes').children].forEach((c, j) => c.classList.toggle('active', j === i));
+  };
+  $('modes').appendChild(b);
+});
+
+let briThrottle = 0, spdThrottle = 0;
+$('bri').oninput = e => {
+  const v = +e.target.value;
+  $('briVal').textContent = v;
+  const now = Date.now();
+  if (now - briThrottle > 40) { briThrottle = now; send([0x02, v]); }
+};
+$('bri').onchange = e => send([0x02, +e.target.value]);
+
+$('spd').oninput = e => {
+  const v = +e.target.value;
+  $('spdVal').textContent = v;
+  const now = Date.now();
+  if (now - spdThrottle > 40) { spdThrottle = now; send([0x03, v]); }
+};
+$('spd').onchange = e => send([0x03, +e.target.value]);
+
+// ---- Podgląd 3D Canvas (odwrócona oś góra/dół) ----
+const canvas = $('cubeCanvas');
+const ctx = canvas.getContext('2d');
+let yaw = -0.62, pitch = 0.42;
+let dragging3D = false, lastX = 0, lastY = 0;
+
+$('resetViewBtn').onclick = () => { yaw = -0.62; pitch = 0.42; render3D(); };
+
+canvas.addEventListener('pointerdown', e => {
+  dragging3D = true; lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging3D) return;
+  yaw += (e.clientX - lastX) * 0.012;
+  // Odwrócony kierunek góra-dół (znak minus zamiast plus)
+  pitch = Math.max(-1.2, Math.min(1.2, pitch - (e.clientY - lastY) * 0.012));
+  lastX = e.clientX; lastY = e.clientY;
+  render3D();
+});
+canvas.addEventListener('pointerup', () => { dragging3D = false; });
+
+function render3D() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+  }
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const f = frames[cur];
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  const scale = Math.min(W, H) * 0.115;
+
+  const project = (x, y, z) => {
+    const cx = x - 2.5, cy = z - 2.5, cz = y - 2.5;
+    const rx = cx * cosY - cz * sinY;
+    const rz = cx * sinY + cz * cosY;
+    const ry = cy * cosP - rz * sinP;
+    const depth = cy * sinP + rz * cosP;
+    const persp = 14 / (14 + depth);
+    return {
+      sx: W / 2 + rx * scale * persp,
+      sy: H / 2 - ry * scale * persp,
+      depth,
+      persp
+    };
+  };
+
+  // Siatka aktywnej warstwy Z
+  const p00 = project(0, 0, curLayer);
+  const p50 = project(5, 0, curLayer);
+  const p55 = project(5, 5, curLayer);
+  const p05 = project(0, 5, curLayer);
+  ctx.beginPath();
+  ctx.moveTo(p00.sx, p00.sy);
+  ctx.lineTo(p50.sx, p50.sy);
+  ctx.lineTo(p55.sx, p55.sy);
+  ctx.lineTo(p05.sx, p05.sy);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(79, 209, 255, 0.05)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(79, 209, 255, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Zbieranie wokseli do sortowania od najdalszego
+  const pts = [];
+  for (let z = 0; z < 6; z++) {
+    for (let y = 0; y < 6; y++) {
+      for (let x = 0; x < 6; x++) {
+        const idx = z * 36 + y * 6 + x;
+        const on = !!f.v[idx];
+        const isCurLayer = (z === curLayer);
+        if (!on && !isCurLayer && (x !== 0 && x !== 5 && y !== 0 && y !== 5 && z !== 0 && z !== 5)) continue;
+        const p = project(x, y, z);
+        pts.push({ ...p, on, isCurLayer });
+      }
+    }
+  }
+  pts.sort((a, b) => b.depth - a.depth);
+
+  for (const pt of pts) {
+    ctx.beginPath();
+    if (pt.on) {
+      const r = 4.6 * pt.persp;
+      ctx.arc(pt.sx, pt.sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = pt.isCurLayer ? '#7ce0ff' : '#4fd1ff';
+      ctx.shadowColor = '#4fd1ff';
+      ctx.shadowBlur = pt.isCurLayer ? 12 : 7;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      const r = (pt.isCurLayer ? 2.2 : 1.3) * pt.persp;
+      ctx.arc(pt.sx, pt.sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = pt.isCurLayer ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.07)';
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ---- Edytor i Drag-to-Draw ----
+let drawMode = null;
+
+function applyVoxel(idx, x, y, val, el) {
+  const f = frames[cur];
+  if (f.v[idx] === val) return;
+  f.v[idx] = val;
+  el.classList.toggle('on', !!val);
+  send([0x05, x, y, curLayer, val]);
+  render3D();
+  autosave();
+}
+
+$('grid').addEventListener('pointerdown', e => {
+  const vox = e.target.closest('.vox');
+  if (!vox) return;
+  e.preventDefault();
+  stopPlay();
+  const idx = +vox.dataset.idx;
+  const x = +vox.dataset.x;
+  const y = +vox.dataset.y;
+  drawMode = frames[cur].v[idx] ? 0 : 1;
+  applyVoxel(idx, x, y, drawMode, vox);
+});
+
+$('grid').addEventListener('pointermove', e => {
+  if (drawMode === null) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const vox = el && el.closest('.vox');
+  if (!vox) return;
+  applyVoxel(+vox.dataset.idx, +vox.dataset.x, +vox.dataset.y, drawMode, vox);
+});
+
+window.addEventListener('pointerup', () => {
+  if (drawMode !== null) {
+    drawMode = null;
+    pushFrame(frames[cur]);
+  }
+});
+
+$('onionBtn').onclick = () => {
+  onionSkin = !onionSkin;
+  $('onionBtn').classList.toggle('toggle-on', onionSkin);
+  renderGrid();
+};
+
+function renderStrip() {
+  $('strip').innerHTML = '';
+  frames.forEach((f, i) => {
+    const b = document.createElement('button');
+    b.className = 'strip-btn' + (i === cur ? ' active' : '');
+    b.textContent = i + 1;
+    b.onclick = () => { stopPlay(); cur = i; renderAll(); pushFrame(frames[cur]); };
+    $('strip').appendChild(b);
+  });
+  const active = $('strip').children[cur];
+  if (active) active.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+  updateMeta();
+}
+
+function renderLayers() {
+  $('layers').innerHTML = '';
+  for (let z = 0; z < 6; z++) {
+    const b = document.createElement('button');
+    b.textContent = 'Z' + z;
+    b.className = z === curLayer ? 'active' : '';
+    b.onclick = () => { curLayer = z; renderLayers(); renderGrid(); render3D(); };
+    $('layers').appendChild(b);
+  }
+  $('layerLabel').textContent = 'Warstwa Z=' + curLayer + (curLayer === 0 ? ' (sam dół)' : curLayer === 5 ? ' (sama góra)' : '');
+}
+
+function renderGrid() {
+  const f = frames[cur];
+  const prev = (onionSkin && cur > 0) ? frames[cur - 1] : null;
+  $('grid').innerHTML = '';
+  for (let y = 0; y < 6; y++) {
+    for (let x = 0; x < 6; x++) {
+      const idx = curLayer * 36 + y * 6 + x;
+      const b = document.createElement('div');
+      b.dataset.idx = idx;
+      b.dataset.x = x;
+      b.dataset.y = y;
+      const isGhost = prev && prev.v[idx] && !f.v[idx];
+      b.className = 'vox' + (f.v[idx] ? ' on' : '') + (isGhost ? ' ghost' : '');
+      $('grid').appendChild(b);
+    }
+  }
+}
+
+function updateMeta() {
+  $('frameCounter').textContent = `Klatka ${cur + 1} / ${frames.length}`;
+  const totalMs = frames.reduce((acc, f) => acc + f.ms, 0);
+  $('totalDuration').textContent = `Czas: ${(totalMs / 1000).toFixed(1)}s`;
+}
+
+function renderAll() {
+  renderStrip(); renderLayers(); renderGrid(); render3D();
+  $('ms').value = frames[cur].ms;
+}
+
+$('ms').oninput = e => {
+  frames[cur].ms = Math.max(20, +e.target.value || 300);
+  updateMeta();
+  autosave();
+};
+
+$('applyMsAllBtn').onclick = () => {
+  const val = Math.max(20, +$('ms').value || 300);
+  frames.forEach(f => f.ms = val);
+  updateMeta();
+  autosave();
+  toast(`Ustawiono ${val} ms dla wszystkich klatek`);
+};
+
+// Akcje klatek
+$('addBtn').onclick = () => {
+  stopPlay(); frames.splice(cur + 1, 0, newFrame()); cur++;
+  renderAll(); pushFrame(frames[cur]); autosave();
+};
+$('dupBtn').onclick = () => {
+  stopPlay(); frames.splice(cur + 1, 0, cloneFrame(frames[cur])); cur++;
+  renderAll(); pushFrame(frames[cur]); autosave(); toast('Klatka zduplikowana');
+};
+$('delBtn').onclick = () => {
+  stopPlay();
+  if (frames.length === 1) frames[0] = newFrame();
+  else { frames.splice(cur, 1); cur = Math.min(cur, frames.length - 1); }
+  renderAll(); pushFrame(frames[cur]); autosave();
+};
+$('leftBtn').onclick = () => {
+  if (cur > 0) { [frames[cur-1], frames[cur]] = [frames[cur], frames[cur-1]]; cur--; renderAll(); pushFrame(frames[cur]); autosave(); }
+};
+$('rightBtn').onclick = () => {
+  if (cur < frames.length-1) { [frames[cur+1], frames[cur]] = [frames[cur], frames[cur+1]]; cur++; renderAll(); pushFrame(frames[cur]); autosave(); }
+};
+
+// Narzędzia warstw i 3D
+$('clearBtn').onclick = () => {
+  stopPlay();
+  frames[cur].v.fill(0, curLayer * 36, (curLayer + 1) * 36);
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+};
+$('fillBtn').onclick = () => {
+  stopPlay();
+  frames[cur].v.fill(1, curLayer * 36, (curLayer + 1) * 36);
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+};
+$('invertBtn').onclick = () => {
+  stopPlay();
+  for (let i = curLayer * 36; i < (curLayer + 1) * 36; i++) frames[cur].v[i] ^= 1;
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+};
+$('copyBelowBtn').onclick = () => {
+  if (curLayer === 0) { toast('Brak warstwy poniżej Z0'); return; }
+  stopPlay();
+  const src = (curLayer - 1) * 36;
+  const dst = curLayer * 36;
+  frames[cur].v.set(frames[cur].v.subarray(src, src + 36), dst);
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+  toast(`Skopiowano warstwę Z${curLayer - 1} → Z${curLayer}`);
+};
+$('shiftUpBtn').onclick = () => {
+  stopPlay();
+  const v = frames[cur].v;
+  const top = v.slice(180, 216);
+  v.copyWithin(36, 0, 180);
+  v.set(top, 0);
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+};
+$('shiftDownBtn').onclick = () => {
+  stopPlay();
+  const v = frames[cur].v;
+  const bottom = v.slice(0, 36);
+  v.copyWithin(0, 36, 216);
+  v.set(bottom, 180);
+  renderGrid(); render3D(); pushFrame(frames[cur]); autosave();
+};
+
+// ---- Odtwarzanie ----
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function play() {
+  if (playing) return;
+  playing = true;
+  clearInterval(holdTimer);
+  const token = ++playToken;
+  $('playBtn').textContent = '⏸ Odtwarzanie…';
+  do {
+    for (let i = 0; i < frames.length; i++) {
+      if (token !== playToken) return;
+      cur = i;
+      renderStrip(); renderGrid(); render3D();
+      $('ms').value = frames[i].ms;
+      send([0x04, ...pack(frames[i].v)]);
+      await sleep(frames[i].ms);
+    }
+  } while ($('loop').checked && token === playToken);
+  if (token === playToken) stopPlay();
+}
+function stopPlay() {
+  playToken++; playing = false;
+  $('playBtn').textContent = '▶ Odtwórz';
+  if (frames[cur]) pushFrame(frames[cur]);
+}
+$('playBtn').onclick = play;
+$('stopBtn').onclick = stopPlay;
+
+// ---- Zapis lokalny ----
+const enc = f => ({ v: [...f.v].join(''), ms: f.ms });
+const dec = o => ({ v: Uint8Array.from(o.v, c => +c), ms: o.ms });
+
+function lsGet(k, fb) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : fb; } catch { return fb; } }
+function lsSet(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function autosave()   { lsSet('cube:draft', frames.map(enc)); }
+
+function refreshProjects() {
+  const all = lsGet('cube:projects', {});
+  $('projects').innerHTML = Object.keys(all).length
+    ? Object.keys(all).map(n => `<option value="${n}">${n} (${all[n].length} kl.)</option>`).join('')
+    : '<option value="" disabled>— brak zapisanych projektów —</option>';
+}
+$('saveBtn').onclick = () => {
+  const name = $('name').value.trim();
+  if (!name) { $('name').focus(); toast('Wpisz nazwę projektu'); return; }
+  const all = lsGet('cube:projects', {});
+  all[name] = frames.map(enc);
+  lsSet('cube:projects', all);
+  refreshProjects(); $('projects').value = name;
+  toast('Zapisano „' + name + '"');
+};
+$('loadBtn').onclick = () => {
+  const name = $('projects').value;
+  const all  = lsGet('cube:projects', {});
+  if (!name || !all[name]) return;
+  stopPlay(); frames = all[name].map(dec); cur = 0;
+  $('name').value = name;
+  renderAll(); pushFrame(frames[0]); autosave();
+  toast('Wczytano „' + name + '"');
+};
+$('removeBtn').onclick = () => {
+  const name = $('projects').value;
+  if (!name || !confirm('Usunąć projekt „' + name + '"?')) return;
+  const all = lsGet('cube:projects', {}); delete all[name];
+  lsSet('cube:projects', all); refreshProjects();
+  toast('Usunięto projekt');
+};
+
+// ---- Eksport / Import ----
+$('exportBtn').onclick = () => {
+  const name = $('name').value.trim() || 'cube-projekt';
+  const data = JSON.stringify({ name, frames: frames.map(enc) }, null, 2);
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([data], { type:'application/json' }));
+  a.download = name + '.json';
+  a.click();
+  toast('Wyeksportowano plik JSON');
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const obj = JSON.parse(ev.target.result);
+      if (!obj.frames || !Array.isArray(obj.frames)) throw new Error();
+      stopPlay();
+      frames = obj.frames.map(dec); cur = 0;
+      if (obj.name) $('name').value = obj.name;
+      renderAll(); pushFrame(frames[0]); autosave();
+      toast('Zaimportowano „' + (obj.name || file.name) + '"');
+    } catch { toast('Błąd: nieprawidłowy format pliku'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+// ---- Start ----
+window.addEventListener('resize', render3D);
+const draft = lsGet('cube:draft', null);
+frames = draft && draft.length ? draft.map(dec) : [newFrame()];
+refreshProjects();
+renderAll();
+setDisconnected();
+</script>
+</body>
+</html>
